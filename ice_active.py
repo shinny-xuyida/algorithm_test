@@ -7,9 +7,8 @@ from typing import Optional
 import pandas as pd
 
 # 导入可复用模块
-from market_data import Tick, Order, tick_reader
-from matching_engine import match
-from metrics import Metrics
+from market_data import Tick, Order
+from backtest_engine import run_backtest
 
 # === 冰山对价策略 ============================================================
 
@@ -52,67 +51,29 @@ class IcebergStrategy:
         print(f"追单完成: {new_order.side} {new_order.qty}@{new_order.price}")
         return new_order
 
-# === 主回测循环 ===============================================================
-
-def run_backtest(csv_path: str,
-                 side: str,
-                 total_qty: int,
-                 slice_qty: int,
-                 start_time: str,
-                 contract_multiplier: int = 1) -> dict:
-    """
-    核心循环：逐 Tick 驱动撮合 & 指标收集
-    * csv_path           : 行情 CSV
-    * side               : 'buy' / 'sell'
-    * total_qty          : 总目标量
-    * slice_qty          : 冰山块大小
-    * start_time         : 起始时间 (字符串，可含日期)
-    * contract_multiplier: 合约乘数，用于计算市场VWAP，默认为1
-    """
-    ticks   = tick_reader(csv_path)                   # 全自动 Tick 迭代器
-    start_ts= pd.to_datetime(start_time)              # 起始时间
-    strat   = IcebergStrategy(side, total_qty, slice_qty)
-    metric  = Metrics(contract_multiplier)
-
-    prev_tick: Optional[Tick] = None                  # 上一 Tick
-
-    for tick in ticks:
-        metric.on_tick(tick)                         # 统计市场 VWAP
-        if tick.ts < start_ts:                       # 未到开始时间
-            prev_tick = tick
-            continue
-
-        # --- 若有挂单，用 "下一 Tick"(当前 tick) 撮合 --------------------
-        if strat.pending and prev_tick is not None:
-            fill = match(strat.pending, tick)
-            if fill:
-                print(f"成交: {fill.qty}@{fill.price} at {fill.ts}")
-                metric.on_fill(fill)
-                strat.on_fill()                      # 剩余量扣减
-            else:
-                print(f"未成交，追单: 原价{strat.pending.price} -> 新价{tick.ask if strat.side=='buy' else tick.bid}")
-                strat.chase(tick)                    # 未成交 → 追单
-
-        # --- 让策略决定是否挂新单 ---------------------------------------
-        new_order = strat.on_tick(tick)
-        if new_order:
-            print(f"新下单: {new_order.side} {new_order.qty}@{new_order.price} at {new_order.ts}")
-
-        prev_tick = tick                             # 存起来做下轮对手价
-        if strat.left == 0:                          # 全部成交 → 提前结束
-            break
-
-    return metric.summary(side)
+# === 冰山策略接口说明 ==========================================================
+# 本策略实现以下接口，供回测引擎调用：
+# - on_tick(tick) -> Optional[Order]  # 处理tick，可能返回新订单
+# - on_fill()                         # 处理成交
+# - chase(tick) -> Order             # 追单逻辑
+# - pending: Optional[Order]         # 当前挂单属性
+# - left: int                        # 剩余数量属性
+# - side: str                        # 买卖方向属性
 
 # === CLI 示例 =================================================================
 
 if __name__ == "__main__":
-    # 修改为你的 CSV 路径与参数
-    result = run_backtest(
-        csv_path=r"C:\Users\justr\Desktop\SHFE.cu2510.0.2025-07-07 00_00_00.2025-07-09 00_00_00.csv",
+    # 创建策略实例
+    strategy = IcebergStrategy(
         side="buy",
         total_qty=200,
-        slice_qty=5,
+        slice_qty=5
+    )
+    
+    # 使用通用回测引擎运行回测
+    result = run_backtest(
+        csv_path=r"C:\Users\justr\Desktop\SHFE.cu2510.0.2025-07-07 00_00_00.2025-07-09 00_00_00.csv",
+        strategy=strategy,
         start_time="2025-07-07 09:30:00",  # 修改为CSV数据范围内的时间
         contract_multiplier=5  # 铜期货合约乘数为5吨/手
     )
