@@ -1,12 +1,10 @@
-# strategy/iceberg.py
-# -------------------------------------------------------------------
+# strategy/ice_best.py
 # 冰山对价策略：将大单拆分成小块逐步执行
-# -------------------------------------------------------------------
 
 from typing import Optional
 import pandas as pd
 
-# 导入基础模块（从上级目录）
+# 导入基础模块
 import sys
 import os
 
@@ -18,7 +16,7 @@ if project_root not in sys.path:
 from market_data import Tick, Order
 from .base_strategy import BaseStrategy
 
-class IcebergStrategy(BaseStrategy):
+class IceBestStrategy(BaseStrategy):
     """
     冰山对价策略：最简冰山追单
     - 一次挂 slice_qty 数量

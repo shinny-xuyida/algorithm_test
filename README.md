@@ -1,44 +1,77 @@
 # 算法交易回测框架
 
-这是一个模块化的算法交易策略回测框架，将策略代码与基础设施代码进行了清晰的分离，便于管理和扩展。
+这是一个模块化的算法交易策略回测框架，将策略代码与基础设施代码进行了清晰的分离，便于管理和扩展。支持多档数据处理，提供多种成熟的冰山策略实现。
 
 ## 项目结构
 
 ```
 algorithm_test/
-├── strategy/                # 策略包：包含所有交易策略
-│   ├── __init__.py         # 策略包初始化文件
-│   ├── base_strategy.py    # 策略基类：定义策略标准接口
-│   ├── iceberg.py          # 冰山策略：大单拆分执行策略
-│   └── example.py          # 策略使用示例
-├── backtest_engine.py      # 回测引擎：通用回测框架
-├── market_data.py          # 市场数据：数据类 + CSV读取器  
-├── matching_engine.py      # 撮合引擎：通用撮合逻辑
-├── metrics.py             # 指标收集：性能评价指标
-├── contract_multiplier.py  # 合约乘数：品种配置信息
-├── ice_active.py          # 冰山策略示例（兼容性文件）
-└── README.md              # 项目说明文档
+├── strategy/                        # 策略包：包含所有交易策略
+│   ├── __init__.py                 # 策略包初始化文件
+│   ├── base_strategy.py            # 策略基类：定义策略标准接口
+│   ├── ice_best.py                 # 冰山对价策略：主动成交策略
+│   ├── ice_hang.py                 # 冰山挂价策略：被动等待策略  
+│   ├── ice_smart.py                # 冰山智能策略：智能切换策略（支持5档优化）
+│   ├── example_ice_best_price.py   # 对价策略使用示例
+│   ├── example_ice_hang_price.py   # 挂价策略使用示例
+│   └── example_ice_smart.py        # 智能策略使用示例
+├── backtest_engine.py              # 回测引擎：通用回测框架
+├── market_data.py                  # 市场数据：数据类 + CSV读取器（支持多档）  
+├── matching_engine.py              # 撮合引擎：通用撮合逻辑
+├── metrics.py                     # 指标收集：性能评价指标
+├── contract_multiplier.py          # 合约乘数：品种配置信息
+└── README.md                      # 项目说明文档
 ```
+
+## 核心策略介绍
+
+### 1. 冰山对价策略 (`ice_best.py`)
+- **特点**：主动成交，快速执行
+- **价格**：始终使用对手价（买入用卖一价，卖出用买一价）
+- **适用场景**：追求快速成交，对价格不敏感的大单执行
+- **风险**：可能产生较大滑点，但成交速度快
+
+### 2. 冰山挂价策略 (`ice_hang.py`)
+- **特点**：被动等待，成本控制
+- **价格**：使用己方价格（买入用买一价，卖出用卖一价）
+- **适用场景**：对成交价格敏感，可以等待的场景
+- **风险**：可能成交缓慢或无法完全成交
+
+### 3. 冰山智能策略 (`ice_smart.py`) ⭐
+- **特点**：根据市场状况智能选择挂价或对价
+- **核心算法**：
+  - 盘口失衡指标：`Q = (总买量-总卖量)/(总买量+总卖量)`
+  - 微观价格：量加权的中间价格计算
+  - 双重判断：失衡信号 + 价格趋势信号
+- **5档优化**：
+  - 自动检测数据档位，优先使用5档进行计算
+  - 如果没有5档数据，自动回退到1档计算
+  - 多档计算能更准确反映市场深度和流动性
+- **适用场景**：平衡成交速度和成本的通用解决方案
 
 ## 核心模块说明
 
 ### 策略层 (`strategy/`)
 - **`base_strategy.py`** - 策略基类，定义所有策略必须实现的接口
-- **`iceberg.py`** - 冰山策略实现，将大单拆分成小块逐步执行
-- **`example.py`** - 策略使用示例，展示如何配置和运行不同策略
+- **`ice_best.py`** - 冰山对价策略，追求快速成交
+- **`ice_hang.py`** - 冰山挂价策略，追求成本控制
+- **`ice_smart.py`** - 冰山智能策略，智能决策（支持5档）
+- **`example_*.py`** - 各策略的使用示例和配置模板
 
 ### 基础设施层
 - **`backtest_engine.py`** - 通用回测引擎，支持任意策略的回测
-- **`market_data.py`** - 市场数据处理，包含Tick/Order/Fill数据类和CSV读取器
+- **`market_data.py`** - 市场数据处理，支持1-5档数据自动解析
 - **`matching_engine.py`** - 撮合引擎，模拟市场订单撮合过程
-- **`metrics.py`** - 指标收集器，计算策略性能评价指标
-- **`contract_multiplier.py`** - 合约配置，包含各品种的合约乘数信息
+- **`metrics.py`** - 指标收集器，计算VWAP、滑点、交易时长等关键指标
+- **`contract_multiplier.py`** - 合约配置，支持70+期货品种自动识别
 
 ## 策略接口规范
 
 所有策略都必须继承`BaseStrategy`并实现以下接口：
 
 ```python
+from strategy.base_strategy import BaseStrategy
+
 class YourStrategy(BaseStrategy):
     def on_tick(self, tick: Tick) -> Optional[Order]:
         """处理新的市场数据tick，可能返回新订单"""
@@ -55,72 +88,116 @@ class YourStrategy(BaseStrategy):
 
 ## 使用方法
 
-### 1. 使用现有策略
+### 1. 对价策略（快速成交）
 
 ```python
-from strategy import IcebergStrategy
+from strategy import IceBestStrategy
 from backtest_engine import run_backtest
 
-# 创建策略实例
-strategy = IcebergStrategy(
+# 创建对价策略实例
+strategy = IceBestStrategy(
     side="buy",          # 买入方向
-    total_qty=200,       # 总目标量
-    slice_qty=5          # 每次挂单量
+    total_qty=200,       # 总目标量200手
+    slice_qty=5          # 每次挂单5手
 )
 
 # 运行回测
 result = run_backtest(
     csv_path="your_data.csv",
     strategy=strategy,
-    start_time="2025-07-07 09:30:00"
+    start_time="2025-07-07 14:00:00"
 )
 ```
 
-### 2. 开发新策略
+### 2. 挂价策略（成本控制）
 
 ```python
-from strategy.base_strategy import BaseStrategy
+from strategy import IceHangStrategy
 
-class MyStrategy(BaseStrategy):
-    def __init__(self, side, total_qty, **kwargs):
-        super().__init__(side, total_qty)
-        # 初始化你的策略参数
-    
-    def on_tick(self, tick):
-        # 实现你的策略逻辑
-        pass
-    
-    def on_fill(self):
-        # 处理成交
-        pass
-    
-    def chase(self, tick):
-        # 追价逻辑
-        pass
+strategy = IceHangStrategy(
+    side="sell",         # 卖出方向
+    total_qty=100,       # 总目标量100手
+    slice_qty=3          # 每次挂单3手
+)
 ```
 
-### 3. 快速开始
+### 3. 智能策略（推荐⭐）
+
+```python
+from strategy import IceSmartStrategy
+
+strategy = IceSmartStrategy(
+    side="buy",                    # 买入方向
+    total_qty=200,                 # 总目标量200手
+    slice_qty=5,                   # 每次挂单5手
+    imbalance_threshold=0.2        # 盘口失衡阈值（可选）
+)
+```
+
+### 4. 快速开始
 
 ```bash
-# 运行冰山策略示例
-python ice_active.py
+# 运行对价策略示例
+python strategy/example_ice_best_price.py
 
-# 或运行详细的策略示例
-python strategy/example.py
+# 运行挂价策略示例  
+python strategy/example_ice_hang_price.py
+
+# 运行智能策略示例（推荐）
+python strategy/example_ice_smart.py
 ```
 
-## 特性
+## 核心特性
 
-- **清晰的架构分层**：策略层与基础设施层分离，便于管理
-- **标准化策略接口**：所有策略遵循统一接口，易于扩展
-- **自动数据解析**：支持多种CSV格式，自动识别合约信息
+### 🚀 多档数据支持
+- **自动档位检测**：智能识别1档到5档数据
+- **5档优化算法**：智能策略支持5档深度计算
+- **向下兼容**：没有多档数据时自动回退到1档
+
+### 📊 完整性能评估
+- **VWAP对比**：相对市场成交量加权平均价格的表现
+- **滑点分析**：量化交易成本和市场冲击
+- **执行效率**：成交时长、成交率、委托笔数等指标
+
+### 🏗️ 模块化架构
+- **策略层分离**：策略逻辑与基础设施完全解耦
+- **标准化接口**：统一的策略接口，易于扩展
 - **通用回测引擎**：一次编写，支持所有策略类型
-- **完整性能评估**：提供VWAP、滑点、交易时长等关键指标
-- **品种自动识别**：自动从文件名提取合约信息和乘数
+
+### 🎯 智能算法
+- **双重判断机制**：盘口失衡 + 价格趋势双重确认
+- **自适应决策**：根据市场状况动态选择挂价或对价
+- **风险控制**：避免在不利市场条件下的冲动交易
+
+## 回测结果指标说明
+
+- **平均成交价格**：策略实际成交的量加权平均价格
+- **市场VWAP**：同期市场成交量加权平均价格（基准）
+- **价格滑点**：相对于市场VWAP的成本差异（负值表示优于市场）
+- **执行时长**：从首次成交到最后成交的耗时
+- **成交笔数**：总成交次数
+- **委托笔数**：总委托下单次数（含追单）
 
 ## 扩展指南
 
-1. **添加新策略**：在`strategy/`文件夹中创建新的策略文件，继承`BaseStrategy`
-2. **修改撮合逻辑**：编辑`matching_engine.py`中的`match`函数
-3. **增加性能指标**：扩展`metrics.py`中的`Metrics`类
-4. **支持新数据格式**：修改`market_data.py`中的`tick_reader`函数 
+### 添加新策略
+1. 在`strategy/`文件夹中创建新策略文件
+2. 继承`BaseStrategy`类并实现必要接口
+3. 创建对应的示例文件
+4. 在`strategy/__init__.py`中导出新策略
+
+### 支持新数据格式
+- 修改`market_data.py`中的`tick_reader`函数
+- 添加新的列名映射规则
+- 测试多档数据的解析正确性
+
+### 扩展性能指标
+- 在`metrics.py`中的`Metrics`类添加新指标
+- 更新`summary`方法返回新的评估维度
+
+## 技术支持
+
+- 支持期货、股票等多种金融工具
+- 兼容多种CSV数据格式
+- 自动合约乘数识别（70+期货品种）
+- 完整的调试信息输出 

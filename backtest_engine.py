@@ -56,15 +56,38 @@ def run_backtest(csv_path: str,
                 strategy.on_fill()                   # 剩余量扣减
             else:
                 print(f"未成交，追单: 原价{strategy.pending.price} -> 新价{tick.ask if strategy.side=='buy' else tick.bid}")
-                strategy.chase(tick)                 # 未成交 → 追单
+                # 记录追单前的订单ID，用于判断是否真的产生了新委托
+                old_order_id = strategy.pending.id if strategy.pending else None
+                new_order = strategy.chase(tick)     # 未成交 → 追单
+                # 只有当订单ID发生变化时，才记录新的委托笔数
+                if new_order and (not old_order_id or new_order.id != old_order_id):
+                    metric.on_order()                # 记录追单委托笔数
 
         # --- 让策略决定是否挂新单 ---------------------------------------
         new_order = strategy.on_tick(tick)
         if new_order:
             print(f"新下单: {new_order.side} {new_order.qty}@{new_order.price} at {new_order.ts}")
+            metric.on_order()  # 记录委托笔数
 
         prev_tick = tick                             # 存起来做下轮对手价
         if strategy.left == 0:                      # 全部成交 → 提前结束
             break
 
-    return metric.summary(strategy.side) 
+    # 生成评测结果
+    result = metric.summary(strategy.side)
+    
+    # 输出评测结果
+    print("\n" + "="*50)
+    print("回测评测结果")
+    print("="*50)
+    for key, value in result.items():
+        if value is not None:
+            if isinstance(value, float):
+                print(f"{key}: {value:.4f}")
+            else:
+                print(f"{key}: {value}")
+        else:
+            print(f"{key}: N/A")
+    print("="*50 + "\n")
+    
+    return result 

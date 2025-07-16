@@ -12,10 +12,12 @@ import pandas as pd                         # 读取 CSV & 时间戳处理
 
 @dataclass
 class Tick:
-    """单条行情快照（支持 1~N 档价格）"""
+    """单条行情快照（支持 1~N 档价格和数量）"""
     ts:   pd.Timestamp            # 时间戳
     bids: list                    # [bid_price1 .. bid_priceN]
     asks: list                    # [ask_price1 .. ask_priceN]
+    bid_volumes: list             # [bid_volume1 .. bid_volumeN] - 买档数量
+    ask_volumes: list             # [ask_volume1 .. ask_volumeN] - 卖档数量
     last: float                   # 最新价
     vol:  float                   # 本 Tick 成交量
     amt:  float                   # 本 Tick 成交额
@@ -28,6 +30,14 @@ class Tick:
     @property
     def ask(self) -> float:       # 一级卖价
         return self.asks[0]
+    
+    @property
+    def bid_volume(self) -> float:  # 一级买量
+        return self.bid_volumes[0] if self.bid_volumes else 0.0
+    
+    @property
+    def ask_volume(self) -> float:  # 一级卖量
+        return self.ask_volumes[0] if self.ask_volumes else 0.0
 
 
 @dataclass
@@ -57,6 +67,7 @@ def tick_reader(path: str,
     1. 自动探测合约前缀（或无前缀）
     2. 自动探测最大档位（N 档）
     3. 只要求至少有 bid_price1 / ask_price1
+    4. 自动支持买卖量字段
     """
     df = pd.read_csv(path)                     # 读文件
 
@@ -81,6 +92,8 @@ def tick_reader(path: str,
 
     bid_cols = [f"{prefix}bid_price{i}" for i in range(1, levels + 1)]
     ask_cols = [f"{prefix}ask_price{i}" for i in range(1, levels + 1)]
+    bid_vol_cols = [f"{prefix}bid_volume{i}" for i in range(1, levels + 1)]
+    ask_vol_cols = [f"{prefix}ask_volume{i}" for i in range(1, levels + 1)]
 
     last_col = f"{prefix}last_price"
     vol_col  = f"{prefix}volume"
@@ -98,7 +111,14 @@ def tick_reader(path: str,
         # 3.2 买/卖档列表（缺列或 NaN 自动跳过）
         bids = [float(v) for c in bid_cols if c in row and pd.notna((v := row[c]))]
         asks = [float(v) for c in ask_cols if c in row and pd.notna((v := row[c]))]
+        bid_volumes = [float(v) for c in bid_vol_cols if c in row and pd.notna((v := row[c]))]
+        ask_volumes = [float(v) for c in ask_vol_cols if c in row and pd.notna((v := row[c]))]
         
+        # 如果没有量数据，用默认值填充
+        if not bid_volumes and bids:
+            bid_volumes = [1.0] * len(bids)  # 默认每档1手
+        if not ask_volumes and asks:
+            ask_volumes = [1.0] * len(asks)  # 默认每档1手
 
         if not bids or not asks:             # 缺少一级买/卖价，跳过该行
             print(f"跳过 {ts}：缺少一级买/卖价")
@@ -110,4 +130,4 @@ def tick_reader(path: str,
         vol  = float(row[vol_col])  if vol_col in row and pd.notna(row[vol_col]) else 0.0
         amt  = float(row[amt_col])  if amt_col in row and pd.notna(row[amt_col]) else last * vol
 
-        yield Tick(ts, bids, asks, last, vol, amt) 
+        yield Tick(ts, bids, asks, bid_volumes, ask_volumes, last, vol, amt) 

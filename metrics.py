@@ -10,7 +10,7 @@ from market_data import Fill, Tick
 # === 指标收集器 ===============================================================
 
 class Metrics:
-    """统一口径：avg_fill、VWAP、slippage、duration、trade_count"""
+    """统一口径：avg_fill、VWAP、slippage、duration、trade_count、order_count"""
 
     def __init__(self, contract_multiplier: int = 1):
         self.multiplier = contract_multiplier  # 合约乘数
@@ -21,6 +21,7 @@ class Metrics:
         self.fill_val = 0.0            # 策略成交额累计
         self.fill_vol = 0              # 策略成交量累计
         self.trades   = 0              # 成交笔数
+        self.orders   = 0              # 委托笔数
         self.start_ts: Optional[pd.Timestamp] = None
         self.end_ts  : Optional[pd.Timestamp] = None
 
@@ -39,8 +40,10 @@ class Metrics:
             self._tick_count += 1
         else:
             self._tick_count = 1
-            
 
+    def on_order(self):
+        """记录委托下单"""
+        self.orders += 1
 
     def on_fill(self, fill: Fill):
         if self.start_ts is None:
@@ -71,5 +74,6 @@ class Metrics:
             "市场VWAP": vwap,             # 同期市场成交量加权平均价格
             "价格滑点": slip,             # 相对于市场VWAP的滑点成本
             "执行时长(秒)": dur,          # 从首次成交到最后成交的时间
-            "成交笔数": self.trades       # 总成交次数
+            "成交笔数": self.trades,      # 总成交次数
+            "委托笔数": self.orders       # 总委托次数
         } 
