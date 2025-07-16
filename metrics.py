@@ -64,8 +64,12 @@ class Metrics:
         slip = (avg - vwap) if (avg and vwap and side == "buy") else \
                (vwap - avg) if (avg and vwap and side == "sell") else None
         dur  = (self.end_ts - self.start_ts).total_seconds() if self.start_ts else None
-        return dict(avg_fill_price=avg,
-                    market_vwap=vwap,
-                    slippage=slip,
-                    duration_sec=dur,
-                    trade_count=self.trades) 
+        
+        # 返回中文指标结果
+        return {
+            "平均成交价格": avg,           # 策略实际成交的平均价格
+            "市场VWAP": vwap,             # 同期市场成交量加权平均价格
+            "价格滑点": slip,             # 相对于市场VWAP的滑点成本
+            "执行时长(秒)": dur,          # 从首次成交到最后成交的时间
+            "成交笔数": self.trades       # 总成交次数
+        } 

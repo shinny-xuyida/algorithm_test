@@ -10,13 +10,14 @@ import pandas as pd
 from market_data import Tick, tick_reader
 from matching_engine import match
 from metrics import Metrics
+from contract_multiplier import get_contract_info_from_file
 
 # === 通用回测引擎 ============================================================
 
 def run_backtest(csv_path: str,
                  strategy: Any,
                  start_time: str,
-                 contract_multiplier: int = 1) -> dict:
+                 contract_multiplier: Optional[int] = None) -> dict:
     """
     通用回测引擎：逐 Tick 驱动撮合 & 指标收集
     * csv_path           : 行情 CSV
@@ -28,8 +29,12 @@ def run_backtest(csv_path: str,
                           - left: int                        # 剩余数量
                           - side: str                        # 买卖方向
     * start_time         : 起始时间 (字符串，可含日期)
-    * contract_multiplier: 合约乘数，用于计算市场VWAP，默认为1
+    * contract_multiplier: 合约乘数，用于计算市场VWAP。如果为None则自动从文件名推断
     """
+    # 自动推断合约乘数（如果用户未指定）
+    if contract_multiplier is None:
+        _, contract_multiplier = get_contract_info_from_file(csv_path, default_multiplier=1, verbose=True)
+    
     ticks   = tick_reader(csv_path)                   # 全自动 Tick 迭代器
     start_ts= pd.to_datetime(start_time)              # 起始时间
     metric  = Metrics(contract_multiplier)

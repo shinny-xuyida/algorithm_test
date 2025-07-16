@@ -1,0 +1,74 @@
+# strategy/iceberg.py
+# -------------------------------------------------------------------
+# 冰山对价策略：将大单拆分成小块逐步执行
+# -------------------------------------------------------------------
+
+from typing import Optional
+import pandas as pd
+
+# 导入基础模块（从上级目录）
+import sys
+import os
+
+# 添加项目根目录到路径
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+from market_data import Tick, Order
+from .base_strategy import BaseStrategy
+
+class IcebergStrategy(BaseStrategy):
+    """
+    冰山对价策略：最简冰山追单
+    - 一次挂 slice_qty 数量
+    - 未击中则在下一个tick撤单并追挂
+    """
+
+    def __init__(self, side: str, total_qty: int, slice_qty: int):
+        """
+        初始化冰山策略
+        
+        Args:
+            side: 买卖方向 ('buy' or 'sell')  
+            total_qty: 目标总交易量
+            slice_qty: 每次挂单的冰山块大小
+        """
+        super().__init__(side, total_qty)
+        self.slice = slice_qty
+
+    def _new_order(self, price: float, ts: pd.Timestamp) -> Order:
+        """生成新订单"""
+        self.next_id += 1
+        qty = min(self.slice, self.left)
+        self.pending = Order(self.next_id, self.side, price, qty, ts)
+        return self.pending
+
+    def on_tick(self, tick: Tick) -> Optional[Order]:
+        """
+        处理新tick：如果当前无挂单则按对手价挂新单
+        
+        Args:
+            tick: 市场数据tick
+            
+        Returns:
+            可能返回的新订单
+        """
+        if self.left == 0 or self.pending is not None:
+            return None
+        price = tick.ask if self.side == "buy" else tick.bid
+        return self._new_order(price, tick.ts)
+
+    def on_fill(self):
+        """处理成交：扣减剩余量并清空挂单"""
+        if self.pending:
+            self.left -= self.pending.qty
+            self.pending = None
+
+    def chase(self, tick: Tick) -> Order:
+        """撤单并按最新对手价追挂"""
+        self.pending = None
+        price = tick.ask if self.side == "buy" else tick.bid
+        new_order = self._new_order(price, tick.ts)
+        print(f"追单完成: {new_order.side} {new_order.qty}@{new_order.price}")
+        return new_order 
