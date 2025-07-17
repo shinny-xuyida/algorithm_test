@@ -5,7 +5,8 @@
 
 from typing import Optional
 import pandas as pd
-from market_data import Fill, Tick
+from market_data import Tick
+from matching_engine import Fill
 
 # === 指标收集器 ===============================================================
 

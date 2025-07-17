@@ -1,10 +1,32 @@
 # matching_engine.py
 # -------------------------------------------------------------------
-# 撮合引擎模块：通用撮合逻辑
+# 撮合引擎模块：交易数据类型 + 撮合逻辑
 # -------------------------------------------------------------------
 
+from dataclasses import dataclass
 from typing import Optional
-from market_data import Order, Fill, Tick
+import pandas as pd
+from market_data import Tick
+
+# === 交易数据类型 =============================================================
+
+@dataclass
+class Order:
+    """委托单"""
+    id:    int
+    side:  str                    # 'buy' or 'sell'
+    price: float
+    qty:   int
+    ts:    pd.Timestamp
+
+
+@dataclass
+class Fill:
+    """成交记录"""
+    order_id: int
+    price:    float
+    qty:      int
+    ts:       pd.Timestamp
 
 # === 通用撮合器 ===============================================================
 

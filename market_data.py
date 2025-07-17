@@ -39,25 +39,6 @@ class Tick:
     def ask_volume(self) -> float:  # 一级卖量
         return self.ask_volumes[0] if self.ask_volumes else 0.0
 
-
-@dataclass
-class Order:
-    """委托单"""
-    id:    int
-    side:  str                    # 'buy' or 'sell'
-    price: float
-    qty:   int
-    ts:    pd.Timestamp
-
-
-@dataclass
-class Fill:
-    """成交记录"""
-    order_id: int
-    price:    float
-    qty:      int
-    ts:       pd.Timestamp
-
 # === CSV → Tick 读取器 =======================================================
 
 def tick_reader(path: str,
