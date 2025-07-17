@@ -123,6 +123,5 @@ class IceBestStrategy(BaseStrategy):
         # 生成新的追单订单
         new_order = self._new_order(price, tick.ts)
         
-        # 输出追单信息用于监控和调试
-        print(f"追单完成: {new_order.side} {new_order.qty}@{new_order.price}")
+        # 追单完成，不输出详细信息
         return new_order 

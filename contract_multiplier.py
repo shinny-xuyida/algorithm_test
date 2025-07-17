@@ -165,17 +165,39 @@ def extract_contract_from_filename(csv_path: str) -> str:
     从CSV文件名中提取合约代码
     
     Args:
-        csv_path: CSV文件路径，例如 "SHFE.cu2510.0.2025-07-07 00_00_00.2025-07-09 00_00_00.csv"
+        csv_path: CSV文件路径，支持多种格式：
+        - "SHFE.cu2510.0.2025-07-07 00_00_00.2025-07-09 00_00_00.csv"
+        - "rb2510_tick_2025_07_17_2025_07_17.csv"
         
     Returns:
-        合约代码，例如 "cu2510"
+        合约代码，例如 "cu2510", "rb2510"
     """
     import os
     filename = os.path.basename(csv_path)
-    # 分割文件名，获取合约部分
-    parts = filename.split('.')
-    if len(parts) >= 2:
-        return parts[1]  # 假设格式为 "交易所.合约代码.其他信息.csv"
+    
+    # 去掉文件扩展名
+    filename_without_ext = filename.replace('.csv', '')
+    
+    # 格式1：SHFE.cu2510.0.2025-07-07 形式
+    if '.' in filename_without_ext:
+        parts = filename_without_ext.split('.')
+        if len(parts) >= 2:
+            return parts[1]  # 假设格式为 "交易所.合约代码.其他信息.csv"
+    
+    # 格式2：rb2510_tick_2025_07_17_2025_07_17 形式
+    elif '_tick_' in filename_without_ext:
+        parts = filename_without_ext.split('_tick_')
+        if len(parts) >= 1:
+            return parts[0]  # 取_tick_之前的部分作为合约代码
+    
+    # 格式3：如果没有特殊分隔符，尝试提取字母+数字的组合
+    else:
+        # 寻找连续的字母后跟数字的模式
+        import re
+        match = re.match(r'^([a-zA-Z]+\d+)', filename_without_ext)
+        if match:
+            return match.group(1)
+    
     return ""
 
 
@@ -234,13 +256,27 @@ if __name__ == "__main__":
     # 测试文件名解析功能
     print("\n文件名解析测试:")
     print("-" * 40)
-    test_filename = "SHFE.cu2510.0.2025-07-07 00_00_00.2025-07-09 00_00_00.csv"
-    extracted = extract_contract_from_filename(test_filename)
-    print(f"文件名: {test_filename}")
-    print(f"提取的合约: {extracted}")
+    
+    # 测试旧格式
+    test_filename1 = "SHFE.cu2510.0.2025-07-07 00_00_00.2025-07-09 00_00_00.csv"
+    extracted1 = extract_contract_from_filename(test_filename1)
+    print(f"旧格式文件名: {test_filename1}")
+    print(f"提取的合约: {extracted1}")
+    
+    # 测试新格式
+    test_filename2 = "rb2510_tick_2025_07_17_2025_07_17.csv"
+    extracted2 = extract_contract_from_filename(test_filename2)
+    print(f"新格式文件名: {test_filename2}")
+    print(f"提取的合约: {extracted2}")
     
     # 测试一体化合约信息获取
     print("\n一体化合约信息获取测试:")
     print("-" * 40)
-    contract_code, multiplier = get_contract_info_from_file(test_filename)
-    print(f"返回结果: 合约={contract_code}, 乘数={multiplier}") 
+    
+    # 测试旧格式
+    contract_code1, multiplier1 = get_contract_info_from_file(test_filename1)
+    print(f"旧格式返回结果: 合约={contract_code1}, 乘数={multiplier1}")
+    
+    # 测试新格式
+    contract_code2, multiplier2 = get_contract_info_from_file(test_filename2)
+    print(f"新格式返回结果: 合约={contract_code2}, 乘数={multiplier2}") 

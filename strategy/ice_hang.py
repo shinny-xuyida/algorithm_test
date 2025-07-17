@@ -75,7 +75,6 @@ class IceHangStrategy(BaseStrategy):
             # 如果没有挂单，直接生成新订单
             price = tick.bid if self.side == "buy" else tick.ask
             new_order = self._new_order(price, tick.ts)
-            print(f"重新挂单: {new_order.side} {new_order.qty}@{new_order.price}")
             return new_order
         
         # 计算新的挂单价格
@@ -83,12 +82,9 @@ class IceHangStrategy(BaseStrategy):
         
         # 如果价格没有变化，则不需要撤单重挂，直接返回当前挂单
         if abs(new_price - self.pending.price) < 1e-6:  # 使用浮点数比较的容差
-            print(f"价格未变化({self.pending.price})，保持当前挂单")
             return self.pending
         
         # 价格发生变化，执行撤单重挂
-        print(f"价格变化: {self.pending.price} -> {new_price}，撤单重挂")
         self.pending = None
         new_order = self._new_order(new_price, tick.ts)
-        print(f"重新挂单: {new_order.side} {new_order.qty}@{new_order.price}")
         return new_order

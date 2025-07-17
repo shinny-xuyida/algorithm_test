@@ -1,0 +1,22 @@
+# 忽略结果文件夹
+results/
+
+# 忽略Python缓存文件
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 忽略临时文件
+*.tmp
+*.temp
+*.log
+
+# 忽略IDE配置文件
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 忽略操作系统生成的文件
+.DS_Store
+Thumbs.db 

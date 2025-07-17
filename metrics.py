@@ -23,33 +23,28 @@ class Metrics:
         self.fill_vol = 0              # 策略成交量累计
         self.trades   = 0              # 成交笔数
         self.orders   = 0              # 委托笔数
-        self.start_ts: Optional[pd.Timestamp] = None
-        self.end_ts  : Optional[pd.Timestamp] = None
+        self.first_order_ts: Optional[pd.Timestamp] = None  # 首次下单时间
+        self.last_fill_ts: Optional[pd.Timestamp] = None    # 最后成交时间
 
     def on_tick(self, tick: Tick):
         # 记录第一个tick作为基准点
         if self.first_amt is None:
             self.first_amt = tick.amt
             self.first_vol = tick.vol
-            print(f"首次tick: 价格={tick.last}, 成交量={tick.vol}, 成交额={tick.amt}")
         # 更新最新值
         self.last_amt = tick.amt
         self.last_vol = tick.vol
-        
-        # 每100个tick打印一次调试信息
-        if hasattr(self, '_tick_count'):
-            self._tick_count += 1
-        else:
-            self._tick_count = 1
 
-    def on_order(self):
+    def on_order(self, order_ts: pd.Timestamp = None):
         """记录委托下单"""
         self.orders += 1
+        # 记录首次下单时间
+        if self.first_order_ts is None and order_ts is not None:
+            self.first_order_ts = order_ts
 
     def on_fill(self, fill: Fill):
-        if self.start_ts is None:
-            self.start_ts = fill.ts
-        self.end_ts  = fill.ts
+        # 更新最后成交时间
+        self.last_fill_ts = fill.ts
         self.fill_val += fill.price * fill.qty
         self.fill_vol += fill.qty
         self.trades   += 1
@@ -67,7 +62,8 @@ class Metrics:
         
         slip = (avg - vwap) if (avg and vwap and side == "buy") else \
                (vwap - avg) if (avg and vwap and side == "sell") else None
-        dur  = (self.end_ts - self.start_ts).total_seconds() if self.start_ts else None
+        # 计算从首次下单到最后成交的市场时间
+        dur = (self.last_fill_ts - self.first_order_ts).total_seconds() if (self.first_order_ts and self.last_fill_ts) else None
         
         # 返回中文指标结果
         return {

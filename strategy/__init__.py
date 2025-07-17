@@ -5,10 +5,12 @@ from .base_strategy import BaseStrategy
 from .ice_best import IceBestStrategy
 from .ice_hang import IceHangStrategy
 from .ice_smart import IceSmartStrategy
+from .ice_smart_only_imbalance import IceSmartOnlyImbalanceStrategy
 
 __all__ = [
     'BaseStrategy',
     'IceBestStrategy',
     'IceHangStrategy',
-    'IceSmartStrategy'
+    'IceSmartStrategy',
+    'IceSmartOnlyImbalanceStrategy'
 ] 

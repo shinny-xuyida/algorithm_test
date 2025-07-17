@@ -67,8 +67,6 @@ class IceSmartStrategy(BaseStrategy):
         available_levels = min(len(tick.bids), len(tick.asks), len(tick.bid_volumes), len(tick.ask_volumes))
         use_levels = min(5, available_levels) if available_levels >= 5 else 1
         
-        print(f"可用档位: {available_levels}, 实际使用: {use_levels}档")
-        
         # 计算总买量和总卖量
         total_bid_vol = sum(tick.bid_volumes[:use_levels])
         total_ask_vol = sum(tick.ask_volumes[:use_levels])
@@ -99,11 +97,11 @@ class IceSmartStrategy(BaseStrategy):
         # 4. 判断micro-price方向信号
         mid_price = (tick.bid + tick.ask) / 2
         if self.side == "buy":
-            # 买入：Q < -threshold（买的人多）且 micro_price更接近买一价（上涨）
-            direction_signal = (Q < -self.threshold) and (abs(micro_price - tick.bid) < abs(micro_price - tick.ask))
-        else:
-            # 卖出：Q > threshold（卖的人多）且 micro_price更接近卖一价（下跌）
+            # 买入：Q > threshold（买盘多，价格可能上涨）且 micro_price更接近卖一价（确认上涨趋势）
             direction_signal = (Q > self.threshold) and (abs(micro_price - tick.ask) < abs(micro_price - tick.bid))
+        else:
+            # 卖出：Q < -threshold（卖盘多，价格可能下跌）且 micro_price更接近买一价（确认下跌趋势）
+            direction_signal = (Q < -self.threshold) and (abs(micro_price - tick.bid) < abs(micro_price - tick.ask))
         
         return Q, micro_price, imbalance_signal, direction_signal
 
@@ -123,29 +121,8 @@ class IceSmartStrategy(BaseStrategy):
         available_levels = min(len(tick.bids), len(tick.asks), len(tick.bid_volumes), len(tick.ask_volumes))
         use_levels = min(5, available_levels) if available_levels >= 5 else 1
         
-        # 打印调试信息
-        if use_levels == 1:
-            print(f"市场指标(1档) - Q: {Q:.4f}, micro_price: {micro_price:.2f}, "
-                  f"失衡: {imbalance_signal}, 方向: {direction_signal}, "
-                  f"买一: {tick.bid}({tick.bid_volume}), 卖一: {tick.ask}({tick.ask_volume})")
-        else:
-            # 显示多档信息
-            bid_info = ", ".join([f"{tick.bids[i]}({tick.bid_volumes[i]})" for i in range(use_levels)])
-            ask_info = ", ".join([f"{tick.asks[i]}({tick.ask_volumes[i]})" for i in range(use_levels)])
-            total_bid_vol = sum(tick.bid_volumes[:use_levels])
-            total_ask_vol = sum(tick.ask_volumes[:use_levels])
-            print(f"市场指标({use_levels}档) - Q: {Q:.4f}, micro_price: {micro_price:.2f}, "
-                  f"失衡: {imbalance_signal}, 方向: {direction_signal}")
-            print(f"买档: [{bid_info}] 总量: {total_bid_vol}")
-            print(f"卖档: [{ask_info}] 总量: {total_ask_vol}")
-        
         # 两个条件都满足才使用对价
         use_market = imbalance_signal and direction_signal
-        
-        if use_market:
-            print(f"智能判断：使用对价策略（{self.side}）")
-        else:
-            print(f"智能判断：使用挂价策略（{self.side}）")
         
         return use_market
 
@@ -197,7 +174,6 @@ class IceSmartStrategy(BaseStrategy):
             price = (tick.ask if self.side == "buy" else tick.bid) if use_market else \
                    (tick.bid if self.side == "buy" else tick.ask)
             new_order = self._new_order(price, tick.ts)
-            print(f"智能重挂: {new_order.side} {new_order.qty}@{new_order.price}")
             return new_order
         
         # 重新智能判断
@@ -207,13 +183,9 @@ class IceSmartStrategy(BaseStrategy):
         
         # 如果价格没有变化，则不需要撤单重挂
         if abs(new_price - self.pending.price) < 1e-6:
-            print(f"价格未变化({self.pending.price})，保持当前挂单")
             return self.pending
         
         # 价格发生变化，执行撤单重挂
-        strategy_type = "对价" if use_market else "挂价"
-        print(f"智能切换到{strategy_type}: {self.pending.price} -> {new_price}，撤单重挂")
         self.pending = None
         new_order = self._new_order(new_price, tick.ts)
-        print(f"智能重挂: {new_order.side} {new_order.qty}@{new_order.price}")
         return new_order
