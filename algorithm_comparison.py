@@ -17,7 +17,7 @@ from strategy import (
     IceSmartStrategy,
     IceSmartOnlyImbalanceStrategy
 )
-from backtest_engine import run_backtest
+from core.backtest_engine import run_backtest
 
 class AlgorithmComparison:
     """算法对比器"""
@@ -63,7 +63,7 @@ class AlgorithmComparison:
             start_time = "2025-07-17 14:00:00"
         
         # 读取数据
-        from market_data import tick_reader
+        from core.market_data import tick_reader
         ticks_data = list(tick_reader(csv_path))
         
         # 创建策略并运行

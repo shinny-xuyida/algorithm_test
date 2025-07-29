@@ -13,8 +13,8 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from market_data import Tick
-from matching_engine import Order
+from core.market_data import Tick
+from core.matching_engine import Order
 from .base_strategy import BaseStrategy
 
 class IceHangStrategy(BaseStrategy):
