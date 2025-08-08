@@ -1,15 +1,17 @@
-# algorithm_comparison.py
-# 算法对比控制文件：运行多种策略并对比表现
+"""
+compare_single_file.py
+单文件策略对比脚本：运行多种策略并对比表现
+"""
 
 import sys
 import os
 import time
 from typing import Dict, Any
 
-# 添加项目根目录到路径
-project_root = os.path.dirname(os.path.abspath(__file__))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
+# 添加项目根目录到路径（脚本位于 scripts/ 目录，需添加上级目录）
+repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if repo_root not in sys.path:
+    sys.path.insert(0, repo_root)
 
 from strategy import (
     IceBestStrategy, 

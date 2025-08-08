@@ -3,7 +3,7 @@
 # 合约乘数配置模块：存储各品种的合约乘数信息
 # -------------------------------------------------------------------
 
-from typing import Optional
+from typing import Optional, Tuple
 
 # 合约乘数字典
 CONTRACT_MULTIPLIERS = {
@@ -201,7 +201,7 @@ def extract_contract_from_filename(csv_path: str) -> str:
     return ""
 
 
-def get_contract_info_from_file(csv_path: str, default_multiplier: int = 1, verbose: bool = True) -> tuple[str, int]:
+def get_contract_info_from_file(csv_path: str, default_multiplier: int = 1, verbose: bool = True) -> Tuple[str, int]:
     """
     从CSV文件路径自动提取合约代码并获取合约乘数
     

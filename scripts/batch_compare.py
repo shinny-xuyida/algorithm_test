@@ -1,5 +1,7 @@
-# algorithm_comparison.py
-# 算法对比控制文件：运行多种策略并对比表现
+"""
+batch_compare.py
+批量多进程策略对比脚本：遍历 test_data/ 中的CSV并对比各策略
+"""
 # 
 # 多进程版本 - 提升回测性能
 # 
@@ -20,10 +22,10 @@ from collections import defaultdict, Counter
 from multiprocessing import Pool, cpu_count
 from functools import partial
 
-# 添加项目根目录到路径
-project_root = os.path.dirname(os.path.abspath(__file__))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
+# 添加项目根目录到路径（脚本位于 scripts/ 目录，需添加上级目录）
+repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if repo_root not in sys.path:
+    sys.path.insert(0, repo_root)
 
 from strategy import (
     IceBestStrategy, 

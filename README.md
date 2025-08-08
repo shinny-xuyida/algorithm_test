@@ -224,25 +224,25 @@ pip install pandas numpy
 ### 基本使用
 ```bash
 # 单文件回测
-python algorithm_comparison.py
+python scripts/compare_single_file.py
 
 # 批量多进程回测（推荐）
-python algorithm_comparison_test_data.py
+python scripts/batch_compare.py
 
 # 指定参数回测
-python algorithm_comparison_test_data.py --processes 8 --side buy --qty 100 --slice 10
+python scripts/batch_compare.py --processes 8 --side buy --qty 100 --slice 10
 ```
 
 ### 高级配置
 ```bash
 # 性能基准测试
-python algorithm_comparison_test_data.py --benchmark
+python scripts/batch_compare.py --benchmark
 
 # 单进程模式（调试用）
-python algorithm_comparison_test_data.py --no-multiprocess
+python scripts/batch_compare.py --no-multiprocess
 
 # 自定义策略参数
-python algorithm_comparison_test_data.py --threshold 0.15 --start-time "09:30:00"
+python scripts/batch_compare.py --threshold 0.15 --start-time "09:30:00"
 ```
 
 ## 🎛️ 自定义策略开发
