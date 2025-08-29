@@ -67,20 +67,21 @@ def classify_move(delta: float) -> str:
 		return "flat"
 
 
-def analyze_moves(last_prices: List[float], threshold_map: Dict[int, float], direction: str = "buy") -> Dict[int, Dict[str, int]]:
+def analyze_moves(last_prices: List[float], threshold_map: Dict[int, float], direction: str = "buy", future_offset: int = 2) -> Dict[int, Dict[str, int]]:
 
 	results: Dict[int, Dict[str, int]] = {}
 	for label, threshold in threshold_map.items():
 		counter: Counter[str] = Counter()
 		trigger_count = 0
 
-		for i in range(len(last_prices) - 2):
+		for i in range(len(last_prices) - future_offset):
 			delta1 = last_prices[i + 1] - last_prices[i]
 			# 方向触发：买入 (T+1 - T) > 阈值；卖出 (T+1 - T) < -阈值
 			if (direction == "buy" and delta1 > threshold) or (direction == "sell" and delta1 < -threshold):
 				trigger_count += 1
-				delta2 = last_prices[i + 2] - last_prices[i + 1]
-				counter[classify_move(delta2)] += 1
+				# 观测窗口：比较 T+future_offset 相对 T+1 的价格变化
+				delta_future = last_prices[i + future_offset] - last_prices[i + 1]
+				counter[classify_move(delta_future)] += 1
 
 		# 保存统计数据（按倍数标签聚合，例如 2,3,4,5 或 -2,-3,-4,-5）
 		results[label] = {
@@ -90,6 +91,27 @@ def analyze_moves(last_prices: List[float], threshold_map: Dict[int, float], dir
 			"down": counter.get("down", 0),
 		}
 
+	return results
+
+
+def analyze_moves_by_offsets(last_prices: List[float], threshold: float, direction: str = "buy", offsets: List[int] | Tuple[int, ...] = (2, 3, 4)) -> Dict[int, Dict[str, int]]:
+
+	results: Dict[int, Dict[str, int]] = {}
+	for off in offsets:
+		counter: Counter[str] = Counter()
+		trigger_count = 0
+		for i in range(len(last_prices) - off):
+			delta1 = last_prices[i + 1] - last_prices[i]
+			if (direction == "buy" and delta1 > threshold) or (direction == "sell" and delta1 < -threshold):
+				trigger_count += 1
+				delta_future = last_prices[i + off] - last_prices[i + 1]
+				counter[classify_move(delta_future)] += 1
+		results[off] = {
+			"triggers": trigger_count,
+			"up": counter.get("up", 0),
+			"flat": counter.get("flat", 0),
+			"down": counter.get("down", 0),
+		}
 	return results
 
 
@@ -135,6 +157,20 @@ def aggregate_results(all_results, labels: List[int], direction: str) -> Dict[in
 	return agg
 
 
+def aggregate_results_by_offsets(all_results, offsets: List[int], direction: str) -> Dict[int, Dict[str, int]]:
+
+	agg: Dict[int, Dict[str, int]] = {o: {"triggers": 0, "up": 0, "flat": 0, "down": 0} for o in offsets}
+	for _fname, res in all_results.items():
+		sub = res.get(direction, {})
+		for o in offsets:
+			if o in sub:
+				agg[o]["triggers"] += sub[o]["triggers"]
+				agg[o]["up"] += sub[o]["up"]
+				agg[o]["flat"] += sub[o]["flat"]
+				agg[o]["down"] += sub[o]["down"]
+	return agg
+
+
 def print_overall_summary(agg: Dict[int, Dict[str, int]], direction: str) -> None:
 
 	label = "买入" if direction == "buy" else "卖出"
@@ -174,6 +210,47 @@ def print_per_file_brief(all_results, direction: str) -> None:
 		print(f"{os.path.basename(fname)} [inst={inst}, tick={tick}] | " + ", ".join(brief))
 
 
+def print_overall_summary_by_offsets(agg: Dict[int, Dict[str, int]], direction: str) -> None:
+
+	label = "买入" if direction == "buy" else "卖出"
+	print(f"================ 总体汇总（{label}） ================")
+	for off in sorted(agg.keys()):
+		stat = agg[off]
+		n = stat["triggers"]
+		if n == 0:
+			print(f"窗口=T+{off} 相对 T+1: 无触发样本")
+			continue
+		up = stat["up"]
+		flat = stat["flat"]
+		down = stat["down"]
+		print(
+			f"窗口=T+{off} | 触发数={n} | 上涨={up} ({up/n:.1%}) | 不动={flat} ({flat/n:.1%}) | 下跌={down} ({down/n:.1%})"
+		)
+
+
+def print_per_file_brief_by_offsets(all_results, direction: str) -> None:
+
+	label = "买入" if direction == "buy" else "卖出"
+	print(f"================ 按文件明细（{label}） ================")
+	for fname in sorted(all_results.keys()):
+		entry = all_results[fname]
+		res = entry.get(direction, {})
+		inst = entry.get("_instrument", "-")
+		tick = entry.get("_tick", "-")
+		brief = []
+		for off in [2, 3, 4]:
+			stat = res.get(off)
+			if not stat or stat["triggers"] == 0:
+				brief.append(f"T+{off}:0")
+				continue
+			n = stat["triggers"]
+			up = stat["up"] / n if n else 0.0
+			flat = stat["flat"] / n if n else 0.0
+			down = stat["down"] / n if n else 0.0
+			brief.append(f"T+{off}:{up:.0%}/{flat:.0%}/{down:.0%} (n={n})")
+		print(f"{os.path.basename(fname)} [inst={inst}, tick={tick}] | " + ", ".join(brief))
+
+
 def main() -> None:
 
 	base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -189,7 +266,7 @@ def main() -> None:
 	if not files:
 		raise RuntimeError("test_data 目录下未找到任何 CSV 文件")
 
-	print("触发条件: 买入测试阈值 = 2~5 × 最小变动单位；卖出测试阈值 = -2~-5 × 最小变动单位（按文件所属品种自动识别）")
+	print("触发条件: 阈值固定为 ±2 × 最小变动单位（按文件所属品种自动识别）；统计窗口：T+2/T+3/T+4 相对 T+1 的上涨/不动/下跌比例")
 	print()
 
 	for csv_path in files:
@@ -200,11 +277,9 @@ def main() -> None:
 			# 根据文件获取最小变动单位（公共函数，内部已做回退）
 			tick = get_tick_size_for_csv(csv_path, base_dir, default=1.0)
 			instrument = extract_instrument_from_filename(csv_path)
-			# 构建买入与卖出阈值映射（以倍数为标签，聚合时一致）
-			buy_thresholds = {2: 2.0 * tick, 3: 3.0 * tick, 4: 4.0 * tick, 5: 5.0 * tick}
-			sell_thresholds = {-2: 2.0 * tick, -3: 3.0 * tick, -4: 4.0 * tick, -5: 5.0 * tick}
-			res_buy = analyze_moves(last_prices, buy_thresholds, direction="buy")
-			res_sell = analyze_moves(last_prices, sell_thresholds, direction="sell")
+			# 固定阈值为 2x（买入为 +2x，卖出为 -2x），并按 T+2/T+3/T+4 统计
+			res_buy = analyze_moves_by_offsets(last_prices, threshold=2.0 * tick, direction="buy", offsets=[2, 3, 4])
+			res_sell = analyze_moves_by_offsets(last_prices, threshold=2.0 * tick, direction="sell", offsets=[2, 3, 4])
 			all_results[csv_path] = {"buy": res_buy, "sell": res_sell, "_tick": tick, "_instrument": instrument}
 		except Exception as e:
 			print(f"文件处理失败: {os.path.basename(csv_path)} | {e}")
@@ -212,16 +287,16 @@ def main() -> None:
 	if not all_results:
 		raise RuntimeError("没有任何文件得到有效统计结果")
 
-	# 输出总体与按文件结果
-	agg_buy = aggregate_results(all_results, labels=[2,3,4,5], direction="buy")
-	print_overall_summary(agg_buy, direction="buy")
+	# 输出总体与按文件结果（按 T+2/3/4 窗口）
+	agg_buy = aggregate_results_by_offsets(all_results, offsets=[2,3,4], direction="buy")
+	print_overall_summary_by_offsets(agg_buy, direction="buy")
 	print()
-	print_per_file_brief(all_results, direction="buy")
+	print_per_file_brief_by_offsets(all_results, direction="buy")
 	print()
-	agg_sell = aggregate_results(all_results, labels=[-2,-3,-4,-5], direction="sell")
-	print_overall_summary(agg_sell, direction="sell")
+	agg_sell = aggregate_results_by_offsets(all_results, offsets=[2,3,4], direction="sell")
+	print_overall_summary_by_offsets(agg_sell, direction="sell")
 	print()
-	print_per_file_brief(all_results, direction="sell")
+	print_per_file_brief_by_offsets(all_results, direction="sell")
 
 
 if __name__ == "__main__":
